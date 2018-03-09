@@ -1,0 +1,98 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: repro of swagger json schema issue
+
+Resources:
+  commandRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: Testerooski
+      Description: to demo the bug
+      FailOnWarnings: true
+      Body:
+        swagger: '2.0'
+        info:
+          version: '0.1'
+          title: Command API
+        schemes:
+        - https
+        x-amazon-apigateway-request-validators:
+          body-only:
+            validateRequestBody: true
+            validateRequestParameters: false
+        x-amazon-apigateway-request-validator: "body-only"
+        paths:
+          "/publish":
+            post:
+              parameters:
+              - name: "ProxyModel"
+                in: body
+                required: true
+                schema:
+                  $ref: '#/definitions/ProxyModel'
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: 200 response
+              x-amazon-apigateway-auth:
+                type: none
+              x-amazon-apigateway-integration:
+                uri: http://google.com
+                httpMethod: GET
+                type: http_proxy
+                responses:
+                  2\d{2}:
+                    statusCode: '200'
+                    responseTemplates:
+                      application/json: '{"status":"OK"}'
+                  default:
+                    statusCode: '400'
+                    responseTemplates:
+                      application/json: 'json 400 response template'
+        definitions:
+          ProxyModel:
+            id: 'ProxyModel'
+            anyOf:
+              - $ref '#/definitions/foo'
+              - $ref '#/definitions/bar'
+              - $ref '#/definitions/baz'
+          foo:
+            id: 'foo'
+            type: object
+            properties:
+              Type:
+                type: string
+          bar:
+            id: 'bar'
+            type: object
+            properties:
+              Type:
+                type: string
+          baz:
+            id: 'baz'
+            type: object
+            properties:
+              Type:
+                type: string
+
+
+  commandDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - commandRestApi
+    Properties:
+      RestApiId:
+        !Ref commandRestApi
+      Description: "initial deploy"
+      StageName:
+        commandTopicProxy
+
+Outputs:
+  commandTopicHttpsProxyApiId:
+    Description: The URL for the proxy
+    Value:
+      !Ref commandRestApi
+    Export:
+      Name: bug-demo-gateway-id
